@@ -323,6 +323,9 @@ int main(int argc, const char* argv[]) {
     } else if (!strcmp(value, "265cbr")) {
       rc_codec = PT_H265;
       rc_mode = VENC_RC_MODE_H265CBR;
+    } else if (!strcmp(value, "mjpegqp")) {
+      rc_codec = PT_MJPEG;
+      rc_mode = VENC_RC_MODE_MJPEGFIXQP;
     } else {
       printf("> ERROR: Unsuported codec [%s]\n", value);
       exit(1);
@@ -856,6 +859,13 @@ int main(int argc, const char* argv[]) {
       config.stRcAttr.stH265QVbr.u32StatTime = 1;
       config.stRcAttr.stH265QVbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH265QVbr.u32TargetBitRate = venc_max_rate;
+      break;
+
+    case VENC_RC_MODE_MJPEGFIXQP:
+      printf("> Codec: MJPEG QP\n");
+      config.stRcAttr.stMjpegFixQp.u32SrcFrameRate = sensor_framerate;
+      config.stRcAttr.stMjpegFixQp.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stMjpegFixQp.u32Qfactor = 90;
       break;
   }
 
