@@ -917,10 +917,12 @@ int main(int argc, const char* argv[]) {
   rc_param.stSceneChangeDetect.bAdaptiveInsertIDRFrame = HI_TRUE;
   rc_param.stSceneChangeDetect.bDetectSceneChange = HI_TRUE;
 
-  ret = HI_MPI_VENC_SetRcParam(venc_second_ch_id, &rc_param);
-  if (ret != HI_SUCCESS) {
-    printf("ERROR: Unable to set VENC RC options = 0x%x\n", ret);
-    return ret;
+  if (rc_mode != VENC_RC_MODE_MJPEGFIXQP) {
+    ret = HI_MPI_VENC_SetRcParam(venc_second_ch_id, &rc_param);
+    if (ret != HI_SUCCESS) {
+      printf("ERROR: Unable to set VENC RC options = 0x%x\n", ret);
+      return ret;
+    }
   }
 
   HI_MPI_VENC_GetRcParam(venc_second_ch_id, &rc_param);
