@@ -980,19 +980,21 @@ int main(int argc, const char* argv[]) {
       break;
   }
 
-  VENC_REF_PARAM_S ref_param;
-  HI_MPI_VENC_GetRefParam(venc_second_ch_id, &ref_param);
-  printf("> Reference = EN: %d, Base: %d, Enhance: %d\n",
-    ref_param.bEnablePred, ref_param.u32Base, ref_param.u32Enhance);
+  if (rc_codec != PT_MJPEG) {
+    VENC_REF_PARAM_S ref_param;
+    HI_MPI_VENC_GetRefParam(venc_second_ch_id, &ref_param);
+    printf("> Reference = EN: %d, Base: %d, Enhance: %d\n",
+      ref_param.bEnablePred, ref_param.u32Base, ref_param.u32Enhance);
 
-  ref_param.bEnablePred = 1;
-  ref_param.u32Enhance = 0;
-  ref_param.u32Base = 1;
+    ref_param.bEnablePred = 1;
+    ref_param.u32Enhance = 0;
+    ref_param.u32Base = 1;
 
-  ret = HI_MPI_VENC_SetRefParam(venc_second_ch_id, &ref_param);
-  if (ret != HI_SUCCESS) {
-    printf("ERROR: Unable to set VENC REF options = 0x%x\n", ret);
-    return ret;
+    ret = HI_MPI_VENC_SetRefParam(venc_second_ch_id, &ref_param);
+    if (ret != HI_SUCCESS) {
+      printf("ERROR: Unable to set VENC REF options = 0x%x\n", ret);
+      return ret;
+    }
   }
 
   // Setup frame lost strategy
