@@ -1124,11 +1124,6 @@ uint64_t jitter_cnt = 0;
 uint32_t nal_max_size = 0;
 uint32_t single_packets = 0;
 
-uint32_t pps_count = 0;
-uint32_t sps_count = 0;
-uint32_t idr_count = 0;
-uint32_t sei_count = 0;
-uint32_t s_count = 0;
 uint32_t packets_sent = 0;
 
 int processStream(VENC_CHN channel_id, int socket_handle,
@@ -1184,24 +1179,17 @@ int processStream(VENC_CHN channel_id, int socket_handle,
     double interval = getTimeInterval(&current_timestamp, &last_timestamp);
     if (interval > 1) {
       printf("> Rate: %.2f Mbit/sec. (%.1f pps) | Frames: %d, NotFrag: "
-           "%d | AVG Size: %d, MAX Size: %d | S: %d, IDR: %d, SEI: %d, "
-           "PPS: %d, SPS: %d | Packets: %d\n",
+           "%d | AVG Size: %d, MAX Size: %d | Packets: %d\n",
         ((double)bytes_sent * 8) / interval / 1024 / 1024,
         (double)frames_sent / interval, /* jitter_sum / jitter_cnt,*/
         frames_sent, single_packets, bytes_sent / frames_sent,
-        nal_max_size, s_count, idr_count, sei_count, pps_count,
-        sps_count, packets_sent);
+        nal_max_size, packets_sent);
 
       bytes_sent = 0;
       frames_sent = 0;
       jitter_sum = 0;
       jitter_cnt = 0;
       nal_max_size = 0;
-      s_count = 0;
-      idr_count = 0;
-      pps_count = 0;
-      sps_count = 0;
-      sei_count = 0;
       single_packets = 0;
       packets_sent = 0;
       last_timestamp = current_timestamp;
@@ -1211,7 +1199,6 @@ int processStream(VENC_CHN channel_id, int socket_handle,
   return 1;
 }
 
-uint32_t sequence_id = 0;
 uint32_t frame_id = 0;
 uint16_t rtp_sequence = 0;
 
@@ -1250,12 +1237,29 @@ void transmit(int socket_handle, uint8_t* tx_buffer, uint32_t tx_size,
   }
 }
 
-void sendPacket(uint8_t* pack_data, uint32_t pack_size, int socket_handle,
-    struct sockaddr* dst_address, uint32_t max_size) {
-  uint8_t prefix = 4;
-  pack_data += prefix;
-  pack_size -= prefix;
+#pragma pack(1)
+struct FragmentHeader {
+  uint16_t type;
+  uint16_t sequence;
+  uint16_t frame_id;
+  uint16_t total;
+};
 
+struct ContentHeader {
+  uint16_t type;
+};
+#pragma pop
+
+void sendPacket(
+    uint8_t* pack_data,
+    uint32_t pack_size,
+    int socket_handle,
+    struct sockaddr* dst_address,
+    uint32_t max_size) {
+    
+  #define MSG_TYPE_CONTENT 0x0
+  #define MSG_TYPE_FRAGMENT 0x1
+    
   frame_id++;
   frames_sent++;
 
@@ -1267,89 +1271,54 @@ void sendPacket(uint8_t* pack_data, uint32_t pack_size, int socket_handle,
     single_packets++;
   }
 
-  // Get NAL type
-  uint8_t nal_type = pack_data[0] & 0x1F;
-  switch (nal_type) {
-    case 1:
-      s_count++;
-      break;
+  if (pack_size > max_size) {
+    // Split in fragments and transmit each one
+    uint16_t total_fragments = (pack_size + max_size - 1) / max_size;
+    for (uint16_t fragment = 0; fragment < total_fragments; fragment++) {
+      uint16_t type = MSG_TYPE_FRAGMENT;
+      uint32_t offset = fragment * max_size;
+      uint32_t fragment_size = (fragment == total_fragments - 1) ? (pack_size - offset) : max_size;
 
-    case 5:
-      idr_count++;
-      break;
+      struct FragmentHeader header;
+      header.type = type;
+      header.sequence = fragment;
+      header.frame_id = frame_id;
+      header.total = total_fragments;
 
-    case 6:
-      sei_count++;
-      break;
+      struct iovec iov[2];
+      iov[0].iov_base = &header;
+      iov[0].iov_len = sizeof(struct FragmentHeader);
+      iov[1].iov_base = pack_data + offset;
+      iov[1].iov_len = fragment_size;
 
-    case 7:
-      sps_count++;
-      break;
+      struct msghdr msg;
+      msg.msg_iovlen = 2;
+      msg.msg_iov = iov;
+      msg.msg_name = dst_address;
+      msg.msg_namelen = sizeof(struct sockaddr_in);
 
-    case 8:
-      pps_count++;
-      break;
-
-    default:
-      break;
-  }
-
-  if (pack_size > max_size + prefix) {
-    uint8_t nal_type_avc = pack_data[0] & 0x1F;
-    uint8_t nal_type_hevc = (pack_data[0] >> 1) & 0x3F;
-    uint8_t nal_bits_avc = pack_data[0] & 0xE0;
-    uint8_t nal_bits_hevc = pack_data[0] & 0x81;
-
-    bool start_bit = true;
-    uint8_t tx_size = 2;
-
-    while (pack_size) {
-      uint32_t chunk_size = pack_size > max_size ? max_size : pack_size;
-      if (nal_type_avc == 1 || nal_type_avc == 5) {
-        tx_buffer[0] = nal_bits_avc | 28;
-        tx_buffer[1] = nal_type_avc;
-
-        if (start_bit) {
-          pack_data++;
-          pack_size--;
-          tx_buffer[1] = 0x80 | nal_type_avc;
-          start_bit = false;
-        }
-
-        if (chunk_size == pack_size) {
-          tx_buffer[1] |= 0x40;
-        }
-      }
-
-      if (nal_type_hevc == 1 || nal_type_hevc == 19) {
-        tx_buffer[0] = nal_bits_hevc | 49 << 1;
-        tx_buffer[1] = 1;
-        tx_buffer[2] = nal_type_hevc;
-        tx_size = 3;
-
-        if (start_bit) {
-          pack_data += 2;
-          pack_size -= 2;
-          tx_buffer[2] = 0x80 | nal_type_hevc;
-          start_bit = false;
-        }
-
-        if (chunk_size == pack_size) {
-          tx_buffer[2] |= 0x40;
-        }
-      }
-
-      memcpy(tx_buffer + tx_size, pack_data, chunk_size + tx_size);
-      transmit(socket_handle, tx_buffer, chunk_size + tx_size, dst_address);
-
+      sendmsg(socket_handle, &msg, 0);
       packets_sent++;
-      bytes_sent += chunk_size + tx_size;
-
-      pack_data += chunk_size;
-      pack_size -= chunk_size;
+      bytes_sent += fragment_size;
     }
   } else {
-    transmit(socket_handle, pack_data, pack_size, dst_address);
+    struct ContentHeader header;
+    header.type = MSG_TYPE_CONTENT;
+
+    struct iovec iov[2];
+    iov[0].iov_base = &header;
+    iov[0].iov_len = sizeof(struct ContentHeader);
+    iov[1].iov_base = pack_data;
+    iov[1].iov_len = pack_size;
+
+    struct msghdr msg;
+    msg.msg_iovlen = 2;
+    msg.msg_iov = iov;
+    msg.msg_name = dst_address;
+    msg.msg_namelen = sizeof(struct sockaddr_in);
+
+    sendmsg(socket_handle, &msg, 0);
     packets_sent++;
+    bytes_sent += pack_size;
   }
 }
