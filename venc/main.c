@@ -49,11 +49,6 @@ void printHelp() {
     "    -p [Port]      - Sink port                       (Default: 5000)\n"
     "    -r [Rate]      - Max video rate in Kbit/sec.     (Default: 8192)\n"
     "    -n [Size]      - Max payload frame size in bytes (Default: 1400)\n"
-    "    -m [Mode]      - Streaming mode                  (Default: "
-    "compact)\n"
-    "       compact       - Compact UDP stream \n"
-    "       rtp           - RTP stream\n"
-    "\n"
     "    -s [Size]      - Encoded image size              (Default: "
     "version specific)\n"
     "\n"
@@ -105,7 +100,6 @@ void printHelp() {
   );
 }
 
-uint8_t stream_mode = 0;
 uint16_t goke_version = 200;
 SensorType sensor_type = IMX307;
 uint32_t sensor_width = 1280;
@@ -184,19 +178,6 @@ int main(int argc, const char* argv[]) {
 
   __OnArgument("-n") {
     max_frame_size = atoi(__ArgValue);
-    continue;
-  }
-
-  __OnArgument("-m") {
-    const char* value = __ArgValue;
-    if (!strcmp(value, "compact")) {
-      stream_mode = 0;
-    } else if (!strcmp(value, "rtp")) {
-      stream_mode = 1;
-    } else {
-      printf("> ERROR: Unknown streaming mode\n");
-      exit(1);
-    }
     continue;
   }
 
@@ -1238,42 +1219,6 @@ int processStream(PAYLOAD_TYPE_E codec, VENC_CHN channel_id, int socket_handle,
 }
 
 uint32_t frame_id = 0;
-uint16_t rtp_sequence = 0;
-
-void transmit(int socket_handle, uint8_t* tx_buffer, uint32_t tx_size,
-  struct sockaddr* dst_address) {
-
-  switch (stream_mode) {
-    // Compact mode
-    case 0:
-      sendto(socket_handle, tx_buffer, tx_size, 0, dst_address, sizeof(struct sockaddr_in));
-      break;
-
-    // RTP mode
-    case 1:
-      struct RTPHeader rtp_header;
-      rtp_header.version = 0x80;
-      rtp_header.sequence = htobe16(rtp_sequence++);
-      rtp_header.payload_type = 0x60;
-      rtp_header.timestamp = 0;
-      rtp_header.ssrc_id = 0xDEADBEEF;
-
-      struct iovec iov[2];
-      iov[0].iov_base = &rtp_header;
-      iov[0].iov_len = sizeof(struct RTPHeader);
-      iov[1].iov_base = tx_buffer;
-      iov[1].iov_len = tx_size;
-
-      struct msghdr msg;
-      msg.msg_iovlen = 2;
-      msg.msg_iov = iov;
-      msg.msg_name = dst_address;
-      msg.msg_namelen = sizeof(struct sockaddr_in);
-
-      sendmsg(socket_handle, &msg, 0);
-      break;
-  }
-}
 
 #pragma pack(1)
 struct FragmentHeader {
