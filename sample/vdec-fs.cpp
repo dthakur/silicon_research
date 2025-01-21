@@ -92,7 +92,7 @@ void process_fragment(const uint8_t* message, ssize_t size) {
 	for (const auto &fragment : fragments) {
 		const FragmentHeader *header = (const FragmentHeader *)fragment.get();
 		memcpy(ptr, fragment.get() + sizeof(FragmentHeader), header->fragment_size);
-		ptr += (size - sizeof(FragmentHeader));
+		ptr += (header->fragment_size - sizeof(FragmentHeader));
 	}
 
 	process_content(complete_message.get(), total_size);
@@ -103,7 +103,6 @@ void process_message(const uint8_t* message, ssize_t size) {
 	assert(size > 2);
 	uint16_t type = *((uint16_t*)message);
 
-	// printf("message received type=%d size=%zd\n", type, size);
 	if (type == MSG_TYPE_CONTENT) {
 		process_content(message + sizeof(ContentHeader), size - sizeof(ContentHeader));
 	} else if (type == MSG_TYPE_FRAGMENT) {
