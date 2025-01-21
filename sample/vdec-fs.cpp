@@ -18,6 +18,8 @@
 #include <vector>
 #include <algorithm>
 #include <memory>
+#include <chrono>
+#include <fstream>
 
 #define BUFFER_SIZE 512 * 512
 
@@ -40,12 +42,18 @@ struct ContentHeader {
 std::map<uint16_t, std::vector<std::shared_ptr<uint8_t[]>>> fragment_map;
 
 void process_content(const uint8_t* message, ssize_t size) {
-	printf("content size=%zd\n", size);
-	for (int i = 0; i < 10 && i < size; ++i) {
-		printf("%02x ", message[i]);
-	}
+	auto now = std::chrono::system_clock::now();
+	auto now_time_t = std::chrono::system_clock::to_time_t(now);
+	auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
-	printf("\n");
+	std::tm now_tm = *std::localtime(&now_time_t);
+	char filename[64];
+	std::strftime(filename, sizeof(filename), "%Y%m%d%H%M%S", &now_tm);
+	sprintf(filename + strlen(filename), "%03d", static_cast<int>(now_ms.count()));
+
+	std::ofstream outfile(filename, std::ios::binary);
+	outfile.write(reinterpret_cast<const char*>(message), size);
+	outfile.close();
 }
 
 void process_message(const uint8_t* message, ssize_t size);
@@ -112,11 +120,6 @@ int main(int argc, const char *argv[]) {
 	if (argc > 1) {
 		rtp_port = atoi(argv[1]);
 	}
-
-	// const char *path = "./images";
-	// if (argc > 2) {
-	// 	path = argv[2];
-	// }
 
 	struct sockaddr_in address;
 	address.sin_family = AF_INET;
