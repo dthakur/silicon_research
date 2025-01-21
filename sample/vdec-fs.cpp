@@ -40,6 +40,12 @@ struct ContentHeader {
 std::map<uint16_t, std::vector<std::shared_ptr<uint8_t[]>>> fragment_map;
 
 void process_content(const uint8_t* message, ssize_t size) {
+	printf("content size=%zd\n", size);
+	for (int i = 0; i < 10 && i < size; ++i) {
+		printf("%02x ", message[i]);
+	}
+
+	printf("\n");
 }
 
 void process_message(const uint8_t* message, ssize_t size);
@@ -48,7 +54,7 @@ void process_fragment(const uint8_t* message, ssize_t size) {
 	struct FragmentHeader *header = (struct FragmentHeader *)message;
 	auto &fragments = fragment_map[header->frame_id];
 
-	printf("fragment received frame_id=%d sequence=%d total=%d\n", header->frame_id, header->sequence, header->total_count);
+	// printf("fragment received frame_id=%d sequence=%d total=%d\n", header->frame_id, header->sequence, header->total_count);
 	
 	// NOTE: code does not deal with garbage data [bad frame_ids, dos etc]
 	
@@ -81,7 +87,7 @@ void process_fragment(const uint8_t* message, ssize_t size) {
 		ptr += (size - sizeof(FragmentHeader));
 	}
 
-	process_message(complete_message.get(), total_size);
+	process_content(complete_message.get(), total_size);
 	fragment_map.erase(header->frame_id);
 }
 
@@ -89,9 +95,9 @@ void process_message(const uint8_t* message, ssize_t size) {
 	assert(size > 2);
 	uint16_t type = *((uint16_t*)message);
 
-	printf("message received type=%d size=%zd\n", type, size);
+	// printf("message received type=%d size=%zd\n", type, size);
 	if (type == MSG_TYPE_CONTENT) {
-		process_content(message, size);
+		process_content(message + sizeof(ContentHeader), size - sizeof(ContentHeader));
 	} else if (type == MSG_TYPE_FRAGMENT) {
 		process_fragment(message, size);
 	} else {
