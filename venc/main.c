@@ -1242,7 +1242,8 @@ struct FragmentHeader {
   uint16_t type;
   uint16_t sequence;
   uint16_t frame_id;
-  uint16_t total;
+  uint16_t total_count;
+  uint16_t fragment_size;
 };
 
 struct ContentHeader {
@@ -1283,7 +1284,8 @@ void sendPacket(
       header.type = type;
       header.sequence = fragment;
       header.frame_id = frame_id;
-      header.total = total_fragments;
+      header.total_count = total_fragments;
+      header.fragment_size = fragment_size;
 
       struct iovec iov[2];
       iov[0].iov_base = &header;
