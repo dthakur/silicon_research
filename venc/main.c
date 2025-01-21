@@ -761,7 +761,6 @@ int main(int argc, const char* argv[]) {
 
   HI_MPI_SYS_Bind(&vi_src, &vpss_dst);
 
-  // Configure h264 encoder
   VENC_CHN_ATTR_S config;
   memset(&config, 0x00, sizeof(config));
   config.stVencAttr.enType = rc_codec;
