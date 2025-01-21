@@ -1165,7 +1165,8 @@ int processStream(VENC_CHN channel_id, int socket_handle,
 
   // Send encoded packets
   for (uint32_t i = 0; i < stream.u32PackCount; i++) {
-    sendPacket(stream.pstPack[i].pu8Addr + stream.pstPack[i].u32Offset,
+    sendPacket(
+      stream.pstPack[i].pu8Addr + stream.pstPack[i].u32Offset,
       stream.pstPack[i].u32Len - stream.pstPack[i].u32Offset,
       socket_handle, dst_address, max_frame_size);
   }
