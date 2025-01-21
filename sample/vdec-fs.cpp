@@ -37,21 +37,10 @@ struct ContentHeader {
 
 std::map<uint16_t, std::vector<std::string>> fragment_map;
 
-void process_message(const char* message, ssize_t size) {
-	assert(size > 2);
-	uint16_t type = *((uint16_t*)message);
-	if (type == MSG_TYPE_CONTENT) {
-		process_content(message, size);
-	} else if (type == MSG_TYPE_FRAGMENT) {
-		process_fragment(message, size);
-	} else {
-		printf("unknown type of message %d", type);
-		return -1;
-	}
-}
-
 void process_content(const char* message, ssize_t size) {
 }
+
+void process_message(const char* message, ssize_t size);
 
 void process_fragment(const char* message, ssize_t size) {
 	struct FragmentHeader *header = (struct FragmentHeader *)message;
@@ -76,6 +65,19 @@ void process_fragment(const char* message, ssize_t size) {
 	}
 }
 
+void process_message(const char* message, ssize_t size) {
+	assert(size > 2);
+	uint16_t type = *((uint16_t*)message);
+	if (type == MSG_TYPE_CONTENT) {
+		process_content(message, size);
+	} else if (type == MSG_TYPE_FRAGMENT) {
+		process_fragment(message, size);
+	} else {
+		printf("unknown type of message %d", type);
+		return;
+	}
+}
+
 int main(int argc, const char *argv[]) {
 	int rtp_port = 5000;
 
@@ -96,7 +98,7 @@ int main(int argc, const char *argv[]) {
 	int udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
 	bind(udp_sock, (struct sockaddr*)&address, sizeof(struct sockaddr_in));
 
-	char *rx_buffer[BUFFER_SIZE];
+	char rx_buffer[BUFFER_SIZE];
 
 	while (true) {
 		ssize_t rx_length = recv(
