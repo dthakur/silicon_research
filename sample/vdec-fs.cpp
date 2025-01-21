@@ -68,6 +68,8 @@ void process_fragment(const char* message, ssize_t size) {
 void process_message(const char* message, ssize_t size) {
 	assert(size > 2);
 	uint16_t type = *((uint16_t*)message);
+
+	printf("message received type=%d size=%zd\n", type, size);
 	if (type == MSG_TYPE_CONTENT) {
 		process_content(message, size);
 	} else if (type == MSG_TYPE_FRAGMENT) {
@@ -101,21 +103,15 @@ int main(int argc, const char *argv[]) {
 	char rx_buffer[BUFFER_SIZE];
 
 	while (true) {
-		ssize_t rx_length = recv(
-			udp_sock,
-			rx_buffer,
-			BUFFER_SIZE,
-			0);
+		ssize_t rx_length = recv(udp_sock, rx_buffer, BUFFER_SIZE, 0);
 
 		if (rx_length < 0) {
-			usleep(1);
-			continue;
+			printf("error in recvfrom rx_length=%zd\n", rx_length);
+			return -1;
 		}
 
 		process_message(rx_buffer, rx_length);
 	}
-
-	free(rx_buffer);
 
 	return 0;
 }
