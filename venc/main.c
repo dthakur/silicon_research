@@ -1079,7 +1079,10 @@ int main(int argc, const char* argv[]) {
 
   while (loop_running) {
     // Process stream on encoder channel #1
-    if (!processStream(venc_second_ch_id, socket_handle,
+    if (!processStream(
+        rc_codec,
+        venc_second_ch_id,
+        socket_handle,
         (struct sockaddr*)&dst_addr, max_frame_size)) {
       // --- Take a rest if no frames received
       // Another way: HI_MPI_VENC_GetFd(vecn_channel_id) + epoll
@@ -1126,7 +1129,7 @@ uint32_t single_packets = 0;
 
 uint32_t packets_sent = 0;
 
-int processStream(VENC_CHN channel_id, int socket_handle,
+int processStream(PAYLOAD_TYPE_E codec, VENC_CHN channel_id, int socket_handle,
   struct sockaddr* dst_address, uint16_t max_frame_size) {
   // Get channel status
   VENC_CHN_STATUS_S channel_status;
@@ -1165,10 +1168,28 @@ int processStream(VENC_CHN channel_id, int socket_handle,
 
   // Send encoded packets
   for (uint32_t i = 0; i < stream.u32PackCount; i++) {
+    VENC_PACK_S packet = stream.pstPack[i];
+    uint8_t packet_type = 0;
+
+    if (codec == PT_MJPEG) {
+      packet_type = packet.DataType.enJPEGEType;
+    } else if (codec == PT_H264) {
+      packet_type = packet.DataType.enH264EType;
+    } else if (codec == PT_H265) {
+      packet_type = packet.DataType.enH265EType;
+    } else {
+      printf("unsupported codec\n");
+      return 0;
+    }
+
     sendPacket(
-      stream.pstPack[i].pu8Addr + stream.pstPack[i].u32Offset,
-      stream.pstPack[i].u32Len - stream.pstPack[i].u32Offset,
-      socket_handle, dst_address, max_frame_size);
+      packet.u64PTS,
+      packet_type,
+      packet.pu8Addr + packet.u32Offset,
+      packet.u32Len - packet.u32Offset,
+      socket_handle,
+      dst_address,
+      max_frame_size);
   }
 
   // Release stream
@@ -1249,10 +1270,14 @@ struct FragmentHeader {
 
 struct ContentHeader {
   uint16_t type;
+  uint16_t packet_type;
+  uint64_t pts;
 };
 #pragma pop
 
 void sendPacket(
+    HI_U64 pts,
+    uint8_t packet_type,
     uint8_t* pack_data,
     uint32_t pack_size,
     int socket_handle,
@@ -1261,6 +1286,9 @@ void sendPacket(
     
   #define MSG_TYPE_CONTENT 0x0
   #define MSG_TYPE_FRAGMENT 0x1
+  #define MAX_PACKET_SIZE 500 * 1024  // 500KB
+
+  static uint8_t buffer[MAX_PACKET_SIZE + sizeof(struct ContentHeader)];
     
   frame_id++;
   frames_sent++;
@@ -1273,13 +1301,27 @@ void sendPacket(
     single_packets++;
   }
 
+  struct ContentHeader content_header;
+  content_header.type = MSG_TYPE_CONTENT;
+  content_header.packet_type = packet_type;
+  content_header.pts = pts;
+
   if (pack_size > max_size) {
+    uint32_t total_size = sizeof(struct ContentHeader) + pack_size;
+    if (total_size > MAX_PACKET_SIZE) {
+      printf("ERROR: Packet size exceeds maximum buffer size\n");
+      return;
+    }
+
+    memcpy(buffer, &content_header, sizeof(struct ContentHeader));
+    memcpy(buffer + sizeof(struct ContentHeader), pack_data, pack_size);
+
     // Split in fragments and transmit each one
-    uint16_t total_fragments = (pack_size + max_size - 1) / max_size;
+    uint16_t total_fragments = (total_size + max_size - 1) / max_size;
     for (uint16_t fragment = 0; fragment < total_fragments; fragment++) {
       uint16_t type = MSG_TYPE_FRAGMENT;
       uint32_t offset = fragment * max_size;
-      uint32_t fragment_size = (fragment == total_fragments - 1) ? (pack_size - offset) : max_size;
+      uint32_t fragment_size = (fragment == total_fragments - 1) ? (total_size - offset) : max_size;
 
       struct FragmentHeader header;
       header.type = type;
@@ -1291,7 +1333,7 @@ void sendPacket(
       struct iovec iov[2];
       iov[0].iov_base = &header;
       iov[0].iov_len = sizeof(struct FragmentHeader);
-      iov[1].iov_base = pack_data + offset;
+      iov[1].iov_base = buffer + offset;
       iov[1].iov_len = fragment_size;
 
       struct msghdr msg;
@@ -1305,11 +1347,8 @@ void sendPacket(
       bytes_sent += fragment_size;
     }
   } else {
-    struct ContentHeader header;
-    header.type = MSG_TYPE_CONTENT;
-
     struct iovec iov[2];
-    iov[0].iov_base = &header;
+    iov[0].iov_base = &content_header;
     iov[0].iov_len = sizeof(struct ContentHeader);
     iov[1].iov_base = pack_data;
     iov[1].iov_len = pack_size;

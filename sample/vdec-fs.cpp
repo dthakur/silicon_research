@@ -1,5 +1,5 @@
 /*
- * g++ vdec-fs.c -o vdec-fs -s -Wall
+ * g++ vdec-fs.cpp -o vdec-fs -s -Wall
  *
  * Usage:
  * ./vdec-fs 5000 ./images
@@ -37,22 +37,22 @@ struct FragmentHeader {
 
 struct ContentHeader {
   uint16_t type;
+  uint16_t packet_type;
+  uint64_t pts;
 };
 
 std::map<uint16_t, std::vector<std::shared_ptr<uint8_t[]>>> fragment_map;
 
 void process_content(const uint8_t* message, ssize_t size) {
-	auto now = std::chrono::system_clock::now();
-	auto now_time_t = std::chrono::system_clock::to_time_t(now);
-	auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+	struct ContentHeader *header = (struct ContentHeader *)message;
+	printf("packet_type = %d\n", header->packet_type);
+	printf("pts = %lu\n", header->pts);
 
-	std::tm now_tm = *std::localtime(&now_time_t);
 	char filename[64];
-	std::strftime(filename, sizeof(filename), "%Y%m%d%H%M%S", &now_tm);
-	sprintf(filename + strlen(filename), "%03d", static_cast<int>(now_ms.count()));
+	sprintf(filename, "%lu", header->pts);
 
-	std::ofstream outfile(filename, std::ios::binary);
-	outfile.write(reinterpret_cast<const char*>(message), size);
+	std::ofstream outfile(filename, std::ios::binary | std::ios::app);
+	outfile.write(reinterpret_cast<const char*>(message + sizeof(struct ContentHeader)), size - sizeof(struct ContentHeader));
 	outfile.close();
 }
 
@@ -95,7 +95,7 @@ void process_fragment(const uint8_t* message, ssize_t size) {
 		ptr += header->fragment_size;
 	}
 
-	process_content(complete_message.get(), total_size);
+	process_message(complete_message.get(), total_size);
 	fragment_map.erase(header->frame_id);
 }
 
@@ -104,7 +104,7 @@ void process_message(const uint8_t* message, ssize_t size) {
 	uint16_t type = *((uint16_t*)message);
 
 	if (type == MSG_TYPE_CONTENT) {
-		process_content(message + sizeof(ContentHeader), size - sizeof(ContentHeader));
+		process_content(message, size);
 	} else if (type == MSG_TYPE_FRAGMENT) {
 		process_fragment(message, size);
 	} else {
