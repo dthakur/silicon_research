@@ -45,8 +45,6 @@ std::map<uint16_t, std::vector<std::shared_ptr<uint8_t[]>>> fragment_map;
 
 void process_content(const uint8_t* message, ssize_t size) {
 	struct ContentHeader *header = (struct ContentHeader *)message;
-	printf("packet_type = %d\n", header->packet_type);
-	printf("pts = %lu\n", header->pts);
 
 	char filename[64];
 	sprintf(filename, "%lu", header->pts);
