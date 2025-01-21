@@ -92,7 +92,7 @@ void process_fragment(const uint8_t* message, ssize_t size) {
 	for (const auto &fragment : fragments) {
 		const FragmentHeader *header = (const FragmentHeader *)fragment.get();
 		memcpy(ptr, fragment.get() + sizeof(FragmentHeader), header->fragment_size);
-		ptr += (header->fragment_size - sizeof(FragmentHeader));
+		ptr += header->fragment_size;
 	}
 
 	process_content(complete_message.get(), total_size);
