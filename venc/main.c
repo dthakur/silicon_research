@@ -70,6 +70,7 @@ void printHelp() {
     "\n"
     "    -f [FPS]       - Encoder FPS (25,30,50,60)       (Default: 60)\n"
     "    -g [Value]     - GOP denominator                 (Default: 10)\n"
+    "    -tf [FPS]      - Target framerate                (Default: sensor framerate)\n"
     "    -c [Codec]     - Encoder mode                    (Default: "
     "264avbr)\n"
     "\n"
@@ -110,6 +111,7 @@ SensorType sensor_type = IMX307;
 uint32_t sensor_width = 1280;
 uint32_t sensor_height = 720;
 uint32_t sensor_framerate = 60;
+uint32_t target_framerate = 0;
 bool loop_running = true;
 
 static void handler(int value) {
@@ -408,11 +410,25 @@ int main(int argc, const char* argv[]) {
     continue;
   }
 
+  __OnArgument("-tf") {
+    target_framerate = atoi(__ArgValue);
+    if (target_framerate > sensor_framerate) {
+      printf("> ERROR: Target framerate cannot be greater than sensor framerate\n");
+      exit(1);
+    }
+    continue;
+  }
+
   __EndParseConsoleArguments__
 
   // Normalize sensor framerate
   if (sensor_framerate > 60) {
     sensor_framerate = 60;
+  }
+
+  // Set default target framerate if not specified
+  if (target_framerate == 0) {
+    target_framerate = sensor_framerate;
   }
 
   // Normalize GOP
@@ -791,80 +807,80 @@ int main(int argc, const char* argv[]) {
 
   switch (rc_mode) {
     case VENC_RC_MODE_H264AVBR:
-      printf("> Codec: h264 AVBR\n");
+      printf("> Codec: h264 AVBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH264AVbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH264AVbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH264AVbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH264AVbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH264AVbr.u32MaxBitRate = venc_max_rate;
       config.stRcAttr.stH264AVbr.u32StatTime = 1;
       break;
 
     case VENC_RC_MODE_H264QVBR:
-      printf("> Codec: h264 QVBR\n");
+      printf("> Codec: h264 QVBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH264QVbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH264QVbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH264QVbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH264QVbr.u32StatTime = 1;
       config.stRcAttr.stH264QVbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH264QVbr.u32TargetBitRate = venc_max_rate;
 
     case VENC_RC_MODE_H264VBR:
-      printf("> Codec: h264 VBR\n");
+      printf("> Codec: h264 VBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH264Vbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH264Vbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH264Vbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH264Vbr.u32StatTime = 1;
       config.stRcAttr.stH264Vbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH264Vbr.u32MaxBitRate = venc_max_rate;
       break;
 
     case VENC_RC_MODE_H264CBR:
-      printf("> Codec: h264 CBR\n");
+      printf("> Codec: h264 CBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH264Cbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH264Cbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH264Cbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH264Cbr.u32StatTime = 1;
       config.stRcAttr.stH264Cbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH264Cbr.u32BitRate = venc_max_rate;
       break;
 
     case VENC_RC_MODE_H265AVBR:
-      printf("> Codec: h265 AVBR\n");
+      printf("> Codec: h265 AVBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH265AVbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH265AVbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH265AVbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH265AVbr.u32StatTime = 1;
       config.stRcAttr.stH265AVbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH265AVbr.u32MaxBitRate = venc_max_rate;
       break;
 
     case VENC_RC_MODE_H265VBR:
-      printf("> Codec: h265 VBR\n");
+      printf("> Codec: h265 VBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH265Vbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH265Vbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH265Vbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH265Vbr.u32StatTime = 1;
       config.stRcAttr.stH265Vbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH265Vbr.u32MaxBitRate = venc_max_rate;
       break;
 
     case VENC_RC_MODE_H265CBR:
-      printf("> Codec: h265 CBR\n");
+      printf("> Codec: h265 CBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH265Cbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH265Cbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH265Cbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH265Cbr.u32StatTime = 1;
       config.stRcAttr.stH265Cbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH265Cbr.u32BitRate = venc_max_rate;
       break;
 
     case VENC_RC_MODE_H265QVBR:
-      printf("> Codec: h265 QVBR\n");
+      printf("> Codec: h265 QVBR FrameRate=%d\n", target_framerate);
       config.stRcAttr.stH265QVbr.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stH265QVbr.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stH265QVbr.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stH265QVbr.u32StatTime = 1;
       config.stRcAttr.stH265QVbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH265QVbr.u32TargetBitRate = venc_max_rate;
       break;
 
     case VENC_RC_MODE_MJPEGFIXQP:
-      printf("> Codec: MJPEG QP\n");
+      printf("> Codec: MJPEG QP FrameRate=%d\n", target_framerate);
       config.stRcAttr.stMjpegFixQp.u32SrcFrameRate = sensor_framerate;
-      config.stRcAttr.stMjpegFixQp.fr32DstFrameRate = sensor_framerate;
+      config.stRcAttr.stMjpegFixQp.fr32DstFrameRate = target_framerate;
       config.stRcAttr.stMjpegFixQp.u32Qfactor = 90;
       break;
   }
