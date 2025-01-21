@@ -1258,10 +1258,6 @@ void sendPacket(
     nal_max_size = pack_size;
   }
 
-  if (pack_size <= max_size) {
-    single_packets++;
-  }
-
   struct ContentHeader content_header;
   content_header.type = MSG_TYPE_CONTENT;
   content_header.packet_type = packet_type;
@@ -1322,6 +1318,7 @@ void sendPacket(
 
     sendmsg(socket_handle, &msg, 0);
     packets_sent++;
+    single_packets++;
     bytes_sent += pack_size;
   }
 }
