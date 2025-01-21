@@ -45,6 +45,8 @@ void process_message(const char* message, ssize_t size);
 void process_fragment(const char* message, ssize_t size) {
 	struct FragmentHeader *header = (struct FragmentHeader *)message;
 	auto &fragments = fragment_map[header->frame_id];
+
+	printf("fragment received frame_id=%d sequence=%d total=%d\n", header->frame_id, header->sequence, header->total);
 	
 	fragments.push_back(std::string(message, size));
 
