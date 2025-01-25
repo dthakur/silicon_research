@@ -69,7 +69,7 @@ struct RTPHeader {
 void* __ISP_THREAD__(void* param);
 int processStream(PAYLOAD_TYPE_E codec, VENC_CHN channel_id, int socket_handle,
   struct sockaddr* dst_address, uint16_t max_frame_size);
-void sendPacket(uint16_t codec, HI_U64 pts, uint8_t packet_type, uint8_t* pack_data, uint32_t pack_size, int socket_handle,
+void sendPacket(uint16_t codec, HI_U64 pts, uint8_t* pack_data, uint32_t pack_size, int socket_handle,
   struct sockaddr* dst_address, uint32_t max_size);
 HI_S32 getGOPAttributes(VENC_GOP_MODE_E enGopMode, VENC_GOP_ATTR_S* pstGopAttr);
 

@@ -1166,32 +1166,29 @@ int processStream(PAYLOAD_TYPE_E codec, VENC_CHN channel_id, int socket_handle,
     return 0;
   }
 
-  // Send encoded packets
+  uint8_t payload[1024 * 1024];
+  uint16_t payload_size = 0;
+
   for (uint32_t i = 0; i < stream.u32PackCount; i++) {
     VENC_PACK_S packet = stream.pstPack[i];
-    uint8_t packet_type = 0;
 
-    if (codec == PT_MJPEG) {
-      packet_type = packet.DataType.enJPEGEType;
-    } else if (codec == PT_H264) {
-      packet_type = packet.DataType.enH264EType;
-    } else if (codec == PT_H265) {
-      packet_type = packet.DataType.enH265EType;
-    } else {
-      printf("unsupported codec\n");
-      return 0;
-    }
-
-    sendPacket(
-      codec,
-      packet.u64PTS,
-      packet_type,
+    // TODO: add boundary check
+    memcpy(
+      payload + payload_size,
       packet.pu8Addr + packet.u32Offset,
-      packet.u32Len - packet.u32Offset,
-      socket_handle,
-      dst_address,
-      max_frame_size);
+      packet.u32Len - packet.u32Offset);
+
+    payload_size += packet.u32Len - packet.u32Offset;
   }
+
+  sendPacket(
+    codec,
+    stream.pstPack[0].u64PTS,
+    payload,
+    payload_size,
+    socket_handle,
+    dst_address,
+    max_frame_size);
 
   // Release stream
   HI_MPI_VENC_ReleaseStream(channel_id, &stream);
@@ -1236,7 +1233,6 @@ struct FragmentHeader {
 struct ContentHeader {
   uint16_t type;
   uint16_t codec;
-  uint16_t packet_type;
   uint64_t pts;
 };
 #pragma pop
@@ -1244,7 +1240,6 @@ struct ContentHeader {
 void sendPacket(
     uint16_t codec,
     HI_U64 pts,
-    uint8_t packet_type,
     uint8_t* pack_data,
     uint32_t pack_size,
     int socket_handle,
@@ -1267,7 +1262,6 @@ void sendPacket(
   struct ContentHeader content_header;
   content_header.type = MSG_TYPE_CONTENT;
   content_header.codec = codec;
-  content_header.packet_type = packet_type;
   content_header.pts = pts;
 
   if (pack_size > max_size) {
