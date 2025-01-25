@@ -1183,6 +1183,7 @@ int processStream(PAYLOAD_TYPE_E codec, VENC_CHN channel_id, int socket_handle,
     }
 
     sendPacket(
+      codec,
       packet.u64PTS,
       packet_type,
       packet.pu8Addr + packet.u32Offset,
@@ -1234,12 +1235,14 @@ struct FragmentHeader {
 
 struct ContentHeader {
   uint16_t type;
+  uint16_t codec;
   uint16_t packet_type;
   uint64_t pts;
 };
 #pragma pop
 
 void sendPacket(
+    uint16_t codec,
     HI_U64 pts,
     uint8_t packet_type,
     uint8_t* pack_data,
@@ -1263,6 +1266,7 @@ void sendPacket(
 
   struct ContentHeader content_header;
   content_header.type = MSG_TYPE_CONTENT;
+  content_header.codec = codec;
   content_header.packet_type = packet_type;
   content_header.pts = pts;
 
