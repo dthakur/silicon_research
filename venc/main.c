@@ -53,6 +53,7 @@ void printHelp() {
     "version specific)\n"
     "\n"
     "      Standard resolutions\n"
+    "        CIF          - 360  x 240\n"
     "        D1           - 720  x 480\n"
     "        960h         - 960  x 576\n"
     "        720p         - 1280 x 720\n"
@@ -354,7 +355,10 @@ int main(int argc, const char* argv[]) {
 
   __OnArgument("-s") {
     const char* value = __ArgValue;
-    if (!strcmp(value, "D1")) {
+    if (!strcmp(value, "CIF")) {
+      image_width = 360;
+      image_height = 240;
+    } else if (!strcmp(value, "D1")) {
       image_width = 720;
       image_height = 480;
     } else if (!strcmp(value, "960p")) {
