@@ -53,7 +53,7 @@ void printHelp() {
     "version specific)\n"
     "\n"
     "      Standard resolutions\n"
-    "        CIF          - 360  x 240\n"
+    "        QVGA         - 320  x 240\n"
     "        D1           - 720  x 480\n"
     "        960h         - 960  x 576\n"
     "        720p         - 1280 x 720\n"
@@ -111,6 +111,188 @@ bool loop_running = true;
 
 static void handler(int value) {
   loop_running = false;
+}
+
+HI_S32 configure_venc_channel(
+    VENC_RC_MODE_E rc_mode,
+    PAYLOAD_TYPE_E rc_codec,
+    VENC_CHN channel_id,
+    VENC_CHN_ATTR_S *config,
+    HI_BOOL venc_by_frame,
+    HI_U32 venc_slice_size,
+    HI_U32 venc_max_rate,
+    int enable_slices,
+    int enable_roi,
+    HI_S32 roi_qp,
+    uint32_t image_width,
+    uint32_t image_height) {
+  HI_S32 ret = HI_MPI_VENC_CreateChn(channel_id, config);
+  if (ret != HI_SUCCESS) {
+    printf("ERROR: Unable to create VENC channel = 0x%x\n", ret);
+    return ret;
+  }
+
+  // Configure rate control for channel #1
+  VENC_RC_PARAM_S rc_param;
+  HI_MPI_VENC_GetRcParam(channel_id, &rc_param);
+  switch (rc_mode) {
+    case VENC_RC_MODE_H264AVBR:
+      rc_param.stParamH264AVbr.s32MaxReEncodeTimes = 0;
+      break;
+
+    case VENC_RC_MODE_H264QVBR:
+      rc_param.stParamH264QVbr.s32MaxReEncodeTimes = 0;
+      break;
+
+    case VENC_RC_MODE_H264VBR:
+      rc_param.stParamH264Vbr.s32MaxReEncodeTimes = 0;
+      break;
+
+    case VENC_RC_MODE_H264CBR:
+      rc_param.stParamH264Cbr.s32MaxReEncodeTimes = 0;
+      break;
+
+    case VENC_RC_MODE_H265AVBR:
+      rc_param.stParamH265AVbr.s32MaxReEncodeTimes = 0;
+      break;
+
+    case VENC_RC_MODE_H265QVBR:
+      rc_param.stParamH265QVbr.s32MaxReEncodeTimes = 0;
+      break;
+
+    case VENC_RC_MODE_H265VBR:
+      rc_param.stParamH265Vbr.s32MaxReEncodeTimes = 0;
+      break;
+
+    case VENC_RC_MODE_H265CBR:
+      rc_param.stParamH265Cbr.s32MaxReEncodeTimes = 0;
+      break;
+  }
+
+  rc_param.s32FirstFrameStartQp = -1;
+  rc_param.stSceneChangeDetect.bAdaptiveInsertIDRFrame = HI_TRUE;
+  rc_param.stSceneChangeDetect.bDetectSceneChange = HI_TRUE;
+
+  if (rc_mode != VENC_RC_MODE_MJPEGFIXQP) {
+    ret = HI_MPI_VENC_SetRcParam(channel_id, &rc_param);
+    if (ret != HI_SUCCESS) {
+      printf("ERROR: Unable to set VENC RC options = 0x%x\n", ret);
+      return ret;
+    }
+  }
+
+  HI_MPI_VENC_GetRcParam(channel_id, &rc_param);
+  printf("> Scene detect = %s, Adaptive IDR = %s, Start Qp = %d, Row dQp = %d\n",
+    rc_param.stSceneChangeDetect.bDetectSceneChange ? "YES" : "NO",
+    rc_param.stSceneChangeDetect.bAdaptiveInsertIDRFrame ? "YES" : "NO",
+    rc_param.s32FirstFrameStartQp, rc_param.u32RowQpDelta);
+
+  // Enable slices (not available in frame mode)
+  switch (rc_codec) {
+    case PT_H264:
+      VENC_H264_SLICE_SPLIT_S avc_param;
+      HI_MPI_VENC_GetH264SliceSplit(channel_id, &avc_param);
+      avc_param.bSplitEnable = 1;
+      avc_param.u32MbLineNum = venc_slice_size;
+
+      if (enable_slices) {
+        if (venc_by_frame) {
+          printf("WARN: Slices are not available in [frame] data format\n");
+        } else {
+          int ret = HI_MPI_VENC_SetH264SliceSplit(channel_id, &avc_param);
+          if (ret != HI_SUCCESS) {
+            printf("ERROR: Unable to set VENC h264 slice size = 0x%x\n", ret);
+            return ret;
+          }
+        }
+      }
+
+      HI_MPI_VENC_GetH264SliceSplit(channel_id, &avc_param);
+      printf("> H264 slices is [%s] | Slice size = %d lines\n",
+        avc_param.bSplitEnable ? "Enabled" : "Disabled", avc_param.u32MbLineNum);
+      break;
+
+    case PT_H265:
+      VENC_H265_SLICE_SPLIT_S hevc_param;
+      HI_MPI_VENC_GetH265SliceSplit(channel_id, &hevc_param);
+      hevc_param.bSplitEnable = 1;
+      hevc_param.u32LcuLineNum = venc_slice_size;
+
+      if (enable_slices) {
+        if (venc_by_frame) {
+          printf("WARN: Slices are not available in [frame] data format\n");
+        } else {
+          int ret = HI_MPI_VENC_SetH265SliceSplit(channel_id, &hevc_param);
+          if (ret != HI_SUCCESS) {
+            printf("ERROR: Unable to set VENC h265 slice size = 0x%x\n", ret);
+            return ret;
+          }
+        }
+      }
+
+      HI_MPI_VENC_GetH265SliceSplit(channel_id, &hevc_param);
+      printf("> H265 slices is [%s] | Slice size = %d lines\n",
+        hevc_param.bSplitEnable ? "Enabled" : "Disabled", hevc_param.u32LcuLineNum);
+      break;
+  }
+
+  if (rc_codec != PT_MJPEG) {
+    VENC_REF_PARAM_S ref_param;
+    HI_MPI_VENC_GetRefParam(channel_id, &ref_param);
+    printf("> Reference = EN: %d, Base: %d, Enhance: %d\n",
+      ref_param.bEnablePred, ref_param.u32Base, ref_param.u32Enhance);
+
+    ref_param.bEnablePred = 1;
+    ref_param.u32Enhance = 0;
+    ref_param.u32Base = 1;
+
+    ret = HI_MPI_VENC_SetRefParam(channel_id, &ref_param);
+    if (ret != HI_SUCCESS) {
+      printf("ERROR: Unable to set VENC REF options = 0x%x\n", ret);
+      return ret;
+    }
+  }
+
+  // Setup frame lost strategy
+  if (rc_codec == PT_H265) {
+    VENC_FRAMELOST_S lost_param;
+    ret = HI_MPI_VENC_GetFrameLostStrategy(channel_id, &lost_param);
+    if (ret != HI_SUCCESS) {
+      printf("ERROR: Unable to get frame lost strategy = 0x%x\n", ret);
+      return ret;
+    }
+
+    lost_param.bFrmLostOpen = 1;
+    lost_param.enFrmLostMode = FRMLOST_PSKIP;
+    lost_param.u32FrmLostBpsThr = venc_max_rate * 1024 / 2;
+    lost_param.u32EncFrmGaps = 1;
+
+    ret = HI_MPI_VENC_SetFrameLostStrategy(channel_id, &lost_param);
+    if (ret != HI_SUCCESS) {
+      printf("ERROR: Unable to set frame lost strategy = 0x%x\n", ret);
+      return ret;
+    }
+  }
+
+  if (enable_roi) {
+    VENC_ROI_ATTR_S roi_config;
+    roi_config.bEnable = HI_TRUE;
+    roi_config.u32Index = 0;
+    roi_config.stRect.s32X = ALIGN_UP(image_width / 4, 16);
+    roi_config.stRect.s32Y = ALIGN_UP(image_height / 4, 16);
+    roi_config.stRect.u32Width = ALIGN_UP(image_width / 2, 16);
+    roi_config.stRect.u32Height = ALIGN_UP(image_height / 2, 16);
+    roi_config.bAbsQp = HI_TRUE;
+    roi_config.s32Qp = roi_qp;
+
+    ret = HI_MPI_VENC_SetRoiAttr(channel_id, &roi_config);
+    if (ret != HI_SUCCESS) {
+      printf("ERROR: Unable to setup VENC ROI = 0x%x\n", ret);
+      return ret;
+    }
+
+    printf("> ROI is [Enabled]\n");
+  }
 }
 
 int main(int argc, const char* argv[]) {
@@ -355,8 +537,8 @@ int main(int argc, const char* argv[]) {
 
   __OnArgument("-s") {
     const char* value = __ArgValue;
-    if (!strcmp(value, "CIF")) {
-      image_width = 360;
+    if (!strcmp(value, "QVGA")) {
+      image_width = 320;
       image_height = 240;
     } else if (!strcmp(value, "D1")) {
       image_width = 720;
@@ -869,173 +1051,23 @@ int main(int argc, const char* argv[]) {
       break;
   }
 
-  // Create channel #1
-  ret = HI_MPI_VENC_CreateChn(venc_second_ch_id, &config);
+  ret = configure_venc_channel(
+    rc_mode,
+    rc_codec,
+    venc_second_ch_id,
+    &config,
+    venc_by_frame,
+    venc_slice_size,
+    venc_max_rate,
+    enable_slices,
+    enable_roi,
+    roi_qp,
+    image_width,
+    image_height);
+  
   if (ret != HI_SUCCESS) {
-    printf("ERROR: Unable to create VENC channel = 0x%x\n", ret);
+    printf("ERROR: Unable to configure VENC channel\n");
     return ret;
-  }
-
-  // Configure rate control for channel #1
-  VENC_RC_PARAM_S rc_param;
-  HI_MPI_VENC_GetRcParam(venc_second_ch_id, &rc_param);
-  switch (rc_mode) {
-    case VENC_RC_MODE_H264AVBR:
-      rc_param.stParamH264AVbr.s32MaxReEncodeTimes = 0;
-      break;
-
-    case VENC_RC_MODE_H264QVBR:
-      rc_param.stParamH264QVbr.s32MaxReEncodeTimes = 0;
-      break;
-
-    case VENC_RC_MODE_H264VBR:
-      rc_param.stParamH264Vbr.s32MaxReEncodeTimes = 0;
-      break;
-
-    case VENC_RC_MODE_H264CBR:
-      rc_param.stParamH264Cbr.s32MaxReEncodeTimes = 0;
-      break;
-
-    case VENC_RC_MODE_H265AVBR:
-      rc_param.stParamH265AVbr.s32MaxReEncodeTimes = 0;
-      break;
-
-    case VENC_RC_MODE_H265QVBR:
-      rc_param.stParamH265QVbr.s32MaxReEncodeTimes = 0;
-      break;
-
-    case VENC_RC_MODE_H265VBR:
-      rc_param.stParamH265Vbr.s32MaxReEncodeTimes = 0;
-      break;
-
-    case VENC_RC_MODE_H265CBR:
-      rc_param.stParamH265Cbr.s32MaxReEncodeTimes = 0;
-      break;
-  }
-
-  rc_param.s32FirstFrameStartQp = -1;
-  rc_param.stSceneChangeDetect.bAdaptiveInsertIDRFrame = HI_TRUE;
-  rc_param.stSceneChangeDetect.bDetectSceneChange = HI_TRUE;
-
-  if (rc_mode != VENC_RC_MODE_MJPEGFIXQP) {
-    ret = HI_MPI_VENC_SetRcParam(venc_second_ch_id, &rc_param);
-    if (ret != HI_SUCCESS) {
-      printf("ERROR: Unable to set VENC RC options = 0x%x\n", ret);
-      return ret;
-    }
-  }
-
-  HI_MPI_VENC_GetRcParam(venc_second_ch_id, &rc_param);
-  printf("> Scene detect = %s, Adaptive IDR = %s, Start Qp = %d, Row dQp = %d\n",
-    rc_param.stSceneChangeDetect.bDetectSceneChange ? "YES" : "NO",
-    rc_param.stSceneChangeDetect.bAdaptiveInsertIDRFrame ? "YES" : "NO",
-    rc_param.s32FirstFrameStartQp, rc_param.u32RowQpDelta);
-
-  // Enable slices (not available in frame mode)
-  switch (rc_codec) {
-    case PT_H264:
-      VENC_H264_SLICE_SPLIT_S avc_param;
-      HI_MPI_VENC_GetH264SliceSplit(venc_second_ch_id, &avc_param);
-      avc_param.bSplitEnable = 1;
-      avc_param.u32MbLineNum = venc_slice_size;
-
-      if (enable_slices) {
-        if (venc_by_frame) {
-          printf("WARN: Slices are not available in [frame] data format\n");
-        } else {
-          int ret = HI_MPI_VENC_SetH264SliceSplit(venc_second_ch_id, &avc_param);
-          if (ret != HI_SUCCESS) {
-            printf("ERROR: Unable to set VENC h264 slice size = 0x%x\n", ret);
-            return ret;
-          }
-        }
-      }
-
-      HI_MPI_VENC_GetH264SliceSplit(venc_second_ch_id, &avc_param);
-      printf("> H264 slices is [%s] | Slice size = %d lines\n",
-        avc_param.bSplitEnable ? "Enabled" : "Disabled", avc_param.u32MbLineNum);
-      break;
-
-    case PT_H265:
-      VENC_H265_SLICE_SPLIT_S hevc_param;
-      HI_MPI_VENC_GetH265SliceSplit(venc_second_ch_id, &hevc_param);
-      hevc_param.bSplitEnable = 1;
-      hevc_param.u32LcuLineNum = venc_slice_size;
-
-      if (enable_slices) {
-        if (venc_by_frame) {
-          printf("WARN: Slices are not available in [frame] data format\n");
-        } else {
-          int ret = HI_MPI_VENC_SetH265SliceSplit(venc_second_ch_id, &hevc_param);
-          if (ret != HI_SUCCESS) {
-            printf("ERROR: Unable to set VENC h265 slice size = 0x%x\n", ret);
-            return ret;
-          }
-        }
-      }
-
-      HI_MPI_VENC_GetH265SliceSplit(venc_second_ch_id, &hevc_param);
-      printf("> H265 slices is [%s] | Slice size = %d lines\n",
-        hevc_param.bSplitEnable ? "Enabled" : "Disabled", hevc_param.u32LcuLineNum);
-      break;
-  }
-
-  if (rc_codec != PT_MJPEG) {
-    VENC_REF_PARAM_S ref_param;
-    HI_MPI_VENC_GetRefParam(venc_second_ch_id, &ref_param);
-    printf("> Reference = EN: %d, Base: %d, Enhance: %d\n",
-      ref_param.bEnablePred, ref_param.u32Base, ref_param.u32Enhance);
-
-    ref_param.bEnablePred = 1;
-    ref_param.u32Enhance = 0;
-    ref_param.u32Base = 1;
-
-    ret = HI_MPI_VENC_SetRefParam(venc_second_ch_id, &ref_param);
-    if (ret != HI_SUCCESS) {
-      printf("ERROR: Unable to set VENC REF options = 0x%x\n", ret);
-      return ret;
-    }
-  }
-
-  // Setup frame lost strategy
-  if (rc_codec == PT_H265) {
-    VENC_FRAMELOST_S lost_param;
-    ret = HI_MPI_VENC_GetFrameLostStrategy(venc_second_ch_id, &lost_param);
-    if (ret != HI_SUCCESS) {
-      printf("ERROR: Unable to get frame lost strategy = 0x%x\n", ret);
-      return ret;
-    }
-
-    lost_param.bFrmLostOpen = 1;
-    lost_param.enFrmLostMode = FRMLOST_PSKIP;
-    lost_param.u32FrmLostBpsThr = venc_max_rate * 1024 / 2;
-    lost_param.u32EncFrmGaps = 1;
-
-    ret = HI_MPI_VENC_SetFrameLostStrategy(venc_second_ch_id, &lost_param);
-    if (ret != HI_SUCCESS) {
-      printf("ERROR: Unable to set frame lost strategy = 0x%x\n", ret);
-      return ret;
-    }
-  }
-
-  if (enable_roi) {
-    VENC_ROI_ATTR_S roi_config;
-    roi_config.bEnable = HI_TRUE;
-    roi_config.u32Index = 0;
-    roi_config.stRect.s32X = ALIGN_UP(image_width / 4, 16);
-    roi_config.stRect.s32Y = ALIGN_UP(image_height / 4, 16);
-    roi_config.stRect.u32Width = ALIGN_UP(image_width / 2, 16);
-    roi_config.stRect.u32Height = ALIGN_UP(image_height / 2, 16);
-    roi_config.bAbsQp = HI_TRUE;
-    roi_config.s32Qp = roi_qp;
-
-    ret = HI_MPI_VENC_SetRoiAttr(venc_second_ch_id, &roi_config);
-    if (ret != HI_SUCCESS) {
-      printf("ERROR: Unable to setup VENC ROI = 0x%x\n", ret);
-      return ret;
-    }
-
-    printf("> ROI is [Enabled]\n");
   }
 
   // Connect VPSS channel #1 to VENC channel #1
