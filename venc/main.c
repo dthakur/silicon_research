@@ -65,7 +65,7 @@ void printHelp() {
     "        WxH          - Custom resolution W x H pixels\n"
     "\n"
     "    -f [FPS]       - Encoder FPS (25,30,50,60)       (Default: 60)\n"
-    "    -g [Value]     - GOP denominator                 (Default: 10)\n"
+    "    --gop [Value]  - GOP\n"
     "    -tf [FPS]      - Target framerate                (Default: sensor framerate)\n"
     "    -c [Codec]     - Encoder mode                    (Default: "
     "264avbr)\n"
@@ -317,8 +317,7 @@ int main(int argc, const char* argv[]) {
   VPSS_CHN vpss_first_ch_id = 0;
   VPSS_CHN vpss_second_ch_id = 1;
 
-  uint32_t venc_gop_denom = 10;
-  uint32_t venc_gop_size = sensor_framerate / venc_gop_denom;
+  uint32_t venc_gop_size = sensor_framerate;
   uint32_t venc_max_rate = 1024 * 8;
 
   VENC_CHN venc_first_ch_id = 0;
@@ -520,8 +519,8 @@ int main(int argc, const char* argv[]) {
     continue;
   }
 
-  __OnArgument("-g") {
-    venc_gop_denom = atoi(__ArgValue);
+  __OnArgument("--gop") {
+    venc_gop_size = atoi(__ArgValue);
     continue;
   }
 
@@ -537,7 +536,10 @@ int main(int argc, const char* argv[]) {
 
   __OnArgument("-s") {
     const char* value = __ArgValue;
-    if (!strcmp(value, "QVGA")) {
+    if (!strcmp(value, "QQVGA")) {
+      image_width = 160;
+      image_height = 120;
+    } else if (!strcmp(value, "QVGA")) {
       image_width = 320;
       image_height = 240;
     } else if (!strcmp(value, "D1")) {
@@ -597,9 +599,6 @@ int main(int argc, const char* argv[]) {
   if (target_framerate == 0) {
     target_framerate = sensor_framerate;
   }
-
-  // Normalize GOP
-  venc_gop_size = sensor_framerate / venc_gop_denom;
 
   /* --- v300 IMX307 --- */
   combo_dev_attr_t* mipi_profile = 0;
