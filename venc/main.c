@@ -1143,14 +1143,43 @@ int main(int argc, const char* argv[]) {
   venc_dst.s32DevId = 0;
   venc_dst.s32ChnId = venc_second_ch_id;
 
-  HI_MPI_SYS_Bind(&vpss_src, &venc_dst);
+  ret = HI_MPI_SYS_Bind(&vpss_src, &venc_dst);
+
+  if (ret != HI_SUCCESS) {
+    printf("ERROR: Unable to bind VPSS channel 2 to VENC channel 2\n");
+    return ret;
+  }
+
+  // Connect VPSS channel #2 to VENC channel #1
+  vpss_src.enModId = HI_ID_VPSS;
+  vpss_src.s32DevId = vpss_group_id;
+  vpss_src.s32ChnId = vpss_second_ch_id;
+
+  venc_dst.enModId = HI_ID_VENC;
+  venc_dst.s32DevId = 0;
+  venc_dst.s32ChnId = venc_first_ch_id;
+  
+  ret = HI_MPI_SYS_Bind(&vpss_src, &venc_dst);
+
+  if (ret != HI_SUCCESS) {
+    printf("ERROR: Unable to bind VPSS channel 2 to VENC channel 1\n");
+    return ret;
+  }
 
   // Start VENC channel #2 without frames count limit
   VENC_RECV_PIC_PARAM_S recv_param;
   recv_param.s32RecvPicNum = -1;
   ret = HI_MPI_VENC_StartRecvFrame(venc_second_ch_id, &recv_param);
   if (ret != HI_SUCCESS) {
-    printf("ERROR: Unable to start Rx frames\n");
+    printf("ERROR: Unable to start Rx frames on VENC channel 2\n");
+    return ret;
+  }
+
+  // Start VENC channel #1 without frames count limit
+  recv_param.s32RecvPicNum = -1;
+  ret = HI_MPI_VENC_StartRecvFrame(venc_first_ch_id, &recv_param);
+  if (ret != HI_SUCCESS) {
+    printf("ERROR: Unable to start Rx frames on VENC channel 1\n");
     return ret;
   }
 
@@ -1165,20 +1194,33 @@ int main(int argc, const char* argv[]) {
   dst_addr.sin_port = htons(udp_sink_port);
   dst_addr.sin_addr.s_addr = udp_sink_ip;
 
+  // Open socket handle for channel 1
+  int socket_handle_ch1 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  struct sockaddr_in dst_addr_ch1;
+  dst_addr_ch1.sin_family = AF_INET;
+  dst_addr_ch1.sin_port = htons(udp_sink_port_ch1);
+  dst_addr_ch1.sin_addr.s_addr = udp_sink_ip;
+
   // Prepare Tx buffer
   tx_buffer = malloc(65536);
   printf("> Ready for streaming\n");
   signal(SIGINT, handler);
 
   while (loop_running) {
-    // Process stream on encoder channel #1
-    if (!processStream(
-        rc_codec,
-        venc_second_ch_id,
-        socket_handle,
-        (struct sockaddr*)&dst_addr, max_frame_size)) {
-      // --- Take a rest if no frames received
-      // Another way: HI_MPI_VENC_GetFd(vecn_channel_id) + epoll
+    // Process stream on encoder channel #2
+    int ch2_sent = processStream(
+      rc_codec,
+      venc_second_ch_id,
+      socket_handle,
+      (struct sockaddr*)&dst_addr, max_frame_size);
+      
+    int ch1_sent = processStream(
+      rc_codec,
+      venc_first_ch_id,
+      socket_handle_ch1,
+      (struct sockaddr*)&dst_addr_ch1, max_frame_size);
+    
+    if (ch2_sent || ch1_sent) {
       usleep(1);
     }
   }
@@ -1222,8 +1264,12 @@ uint32_t single_packets = 0;
 
 uint32_t packets_sent = 0;
 
-int processStream(PAYLOAD_TYPE_E codec, VENC_CHN channel_id, int socket_handle,
-  struct sockaddr* dst_address, uint16_t max_frame_size) {
+int processStream(
+    PAYLOAD_TYPE_E codec,
+    VENC_CHN channel_id,
+    int socket_handle,
+    struct sockaddr* dst_address,
+    uint16_t max_frame_size) {
   // Get channel status
   VENC_CHN_STATUS_S channel_status;
   int ret = HI_MPI_VENC_QueryStatus(channel_id, &channel_status);
