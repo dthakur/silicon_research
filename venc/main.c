@@ -330,6 +330,10 @@ int main(int argc, const char* argv[]) {
   uint16_t udp_sink_port = 5000;
   uint16_t max_frame_size = 1400;
 
+  uint32_t image_width_ch1 = 1280;
+  uint32_t image_height_ch1 = 720;
+  uint16_t udp_sink_port_ch1 = 5001;
+  
   int enable_slices = 1;
   int enable_lowdelay = 0;
   int enable_roi = 0;
@@ -535,6 +539,41 @@ int main(int argc, const char* argv[]) {
     continue;
   }
 
+  __OnArgument("-s1") {
+    const char* value = __ArgValue;
+    if (!strcmp(value, "QQVGA")) {
+      image_width_ch1 = 160;
+      image_height_ch1 = 120;
+    } else if (!strcmp(value, "QVGA")) {
+      image_width_ch1 = 320;
+      image_height_ch1 = 240;
+    } else if (!strcmp(value, "D1")) {
+      image_width_ch1 = 720;
+      image_height_ch1 = 480;
+    } else if (!strcmp(value, "960p")) {
+      image_width_ch1 = 960;
+      image_height_ch1 = 576;
+    } else if (!strcmp(value, "1.3MP")) {
+      image_width_ch1 = 1280;
+      image_height_ch1 = 1024;
+    } else if (!strcmp(value, "720p")) {
+      image_width_ch1 = 1280;
+      image_height_ch1 = 720;
+    } else if (!strcmp(value, "1080p")) {
+      image_width_ch1 = 1920;
+      image_height_ch1 = 1080;
+    } else if (!strcmp(value, "4MP")) {
+      image_width_ch1 = 2592;
+      image_height_ch1 = 1520;
+    } else {
+      if (sscanf(value, "%dx%d", &image_width_ch1, &image_height_ch1) != 2) {
+        printf("> ERROR: Unsupported image size [%s]\n", value);
+        exit(1);
+      }
+    }
+    continue;
+  }
+
   __OnArgument("-s") {
     const char* value = __ArgValue;
     if (!strcmp(value, "QQVGA")) {
@@ -590,6 +629,8 @@ int main(int argc, const char* argv[]) {
   }
 
   __EndParseConsoleArguments__
+
+  udp_sink_port_ch1 = udp_sink_port + 1;
 
   // Normalize sensor framerate
   if (sensor_framerate > 60) {
@@ -1070,7 +1111,27 @@ int main(int argc, const char* argv[]) {
     return ret;
   }
 
-  // Connect VPSS channel #1 to VENC channel #1
+  // Add setup for channel 1
+  ret = configure_venc_channel(
+    rc_mode,
+    rc_codec,
+    venc_first_ch_id, // Channel 1
+    &config,
+    venc_by_frame,
+    venc_slice_size,
+    venc_max_rate,
+    enable_slices,
+    enable_roi,
+    roi_qp,
+    image_width_ch1,
+    image_height_ch1);
+
+  if (ret != HI_SUCCESS) {
+    printf("ERROR: Unable to configure VENC channel 1\n");
+    return ret;
+  }
+
+  // Connect VPSS channel #2 to VENC channel #2
   MPP_CHN_S vpss_src;
   MPP_CHN_S venc_dst;
 
@@ -1084,7 +1145,7 @@ int main(int argc, const char* argv[]) {
 
   HI_MPI_SYS_Bind(&vpss_src, &venc_dst);
 
-  // Start VENC channel #1 without frames count limit
+  // Start VENC channel #2 without frames count limit
   VENC_RECV_PIC_PARAM_S recv_param;
   recv_param.s32RecvPicNum = -1;
   ret = HI_MPI_VENC_StartRecvFrame(venc_second_ch_id, &recv_param);
