@@ -1112,24 +1112,24 @@ int main(int argc, const char* argv[]) {
   }
 
   // Add setup for channel 1
-  ret = configure_venc_channel(
-    rc_mode,
-    rc_codec,
-    venc_first_ch_id, // Channel 1
-    &config,
-    venc_by_frame,
-    venc_slice_size,
-    venc_max_rate,
-    enable_slices,
-    enable_roi,
-    roi_qp,
-    image_width_ch1,
-    image_height_ch1);
+  // ret = configure_venc_channel(
+  //   rc_mode,
+  //   rc_codec,
+  //   venc_first_ch_id, // Channel 1
+  //   &config,
+  //   venc_by_frame,
+  //   venc_slice_size,
+  //   venc_max_rate,
+  //   enable_slices,
+  //   enable_roi,
+  //   roi_qp,
+  //   image_width_ch1,
+  //   image_height_ch1);
 
-  if (ret != HI_SUCCESS) {
-    printf("ERROR: Unable to configure VENC channel 1\n");
-    return ret;
-  }
+  // if (ret != HI_SUCCESS) {
+  //   printf("ERROR: Unable to configure VENC channel 1\n");
+  //   return ret;
+  // }
 
   // Connect VPSS channel #2 to VENC channel #2
   MPP_CHN_S vpss_src;
@@ -1195,11 +1195,11 @@ int main(int argc, const char* argv[]) {
   dst_addr.sin_addr.s_addr = udp_sink_ip;
 
   // Open socket handle for channel 1
-  int socket_handle_ch1 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  struct sockaddr_in dst_addr_ch1;
-  dst_addr_ch1.sin_family = AF_INET;
-  dst_addr_ch1.sin_port = htons(udp_sink_port_ch1);
-  dst_addr_ch1.sin_addr.s_addr = udp_sink_ip;
+  // int socket_handle_ch1 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  // struct sockaddr_in dst_addr_ch1;
+  // dst_addr_ch1.sin_family = AF_INET;
+  // dst_addr_ch1.sin_port = htons(udp_sink_port_ch1);
+  // dst_addr_ch1.sin_addr.s_addr = udp_sink_ip;
 
   // Prepare Tx buffer
   tx_buffer = malloc(65536);
@@ -1214,13 +1214,17 @@ int main(int argc, const char* argv[]) {
       socket_handle,
       (struct sockaddr*)&dst_addr, max_frame_size);
       
-    int ch1_sent = processStream(
-      rc_codec,
-      venc_first_ch_id,
-      socket_handle_ch1,
-      (struct sockaddr*)&dst_addr_ch1, max_frame_size);
+    // int ch1_sent = processStream(
+    //   rc_codec,
+    //   venc_first_ch_id,
+    //   socket_handle_ch1,
+    //   (struct sockaddr*)&dst_addr_ch1, max_frame_size);
     
-    if (ch2_sent || ch1_sent) {
+    // if (ch2_sent || ch1_sent) {
+    //   usleep(1);
+    // }
+
+    if (ch2_sent) {
       usleep(1);
     }
   }
