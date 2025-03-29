@@ -53,6 +53,7 @@ void printHelp() {
     "version specific)\n"
     "\n"
     "      Standard resolutions\n"
+    "        QQVGA        - 160  x 120\n"
     "        QVGA         - 320  x 240\n"
     "        D1           - 720  x 480\n"
     "        960h         - 960  x 576\n"
