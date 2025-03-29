@@ -1175,13 +1175,13 @@ int main(int argc, const char* argv[]) {
     return ret;
   }
 
-  // Start VENC channel #1 without frames count limit
-  recv_param.s32RecvPicNum = -1;
-  ret = HI_MPI_VENC_StartRecvFrame(venc_first_ch_id, &recv_param);
-  if (ret != HI_SUCCESS) {
-    printf("ERROR: Unable to start Rx frames on VENC channel 1\n");
-    return ret;
-  }
+  // // Start VENC channel #1 without frames count limit
+  // recv_param.s32RecvPicNum = -1;
+  // ret = HI_MPI_VENC_StartRecvFrame(venc_first_ch_id, &recv_param);
+  // if (ret != HI_SUCCESS) {
+  //   printf("ERROR: Unable to start Rx frames on VENC channel 1\n");
+  //   return ret;
+  // }
 
   // Start ISP service thread
   pthread_t isp_thread;
