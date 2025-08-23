@@ -497,7 +497,7 @@ int main(int argc, const char* argv[]) {
       rc_codec = PT_MJPEG;
       rc_mode = VENC_RC_MODE_MJPEGFIXQP;
     } else {
-      printf("> ERROR: Unsuported codec [%s]\n", value);
+      printf("> ERROR: Unsupported codec [%s]\n", value);
       exit(1);
     }
     continue;
@@ -1029,6 +1029,7 @@ int main(int argc, const char* argv[]) {
       config.stRcAttr.stH264QVbr.u32StatTime = 1;
       config.stRcAttr.stH264QVbr.u32Gop = venc_gop_size;
       config.stRcAttr.stH264QVbr.u32TargetBitRate = venc_max_rate;
+      break;
 
     case VENC_RC_MODE_H264VBR:
       printf("> Codec: h264 VBR FrameRate=%d\n", target_framerate);
@@ -1378,7 +1379,7 @@ struct ContentHeader {
   uint16_t codec;
   uint64_t pts;
 };
-#pragma pop
+#pragma pack(pop)
 
 void sendPacket(
     uint16_t codec,
