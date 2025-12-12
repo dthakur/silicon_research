@@ -120,11 +120,7 @@ HI_S32 configure_venc_channel(
     VENC_CHN channel_id,
     VENC_CHN_ATTR_S *config,
     HI_BOOL venc_by_frame,
-    HI_U32 venc_slice_size,
     HI_U32 venc_max_rate,
-    int enable_slices,
-    int enable_roi,
-    HI_S32 roi_qp,
     uint32_t image_width,
     uint32_t image_height) {
   HI_S32 ret = HI_MPI_VENC_CreateChn(channel_id, config);
@@ -188,55 +184,6 @@ HI_S32 configure_venc_channel(
     rc_param.stSceneChangeDetect.bAdaptiveInsertIDRFrame ? "YES" : "NO",
     rc_param.s32FirstFrameStartQp, rc_param.u32RowQpDelta);
 
-  // Enable slices (not available in frame mode)
-  switch (rc_codec) {
-    case PT_H264:
-      VENC_H264_SLICE_SPLIT_S avc_param;
-      HI_MPI_VENC_GetH264SliceSplit(channel_id, &avc_param);
-      avc_param.bSplitEnable = 1;
-      avc_param.u32MbLineNum = venc_slice_size;
-
-      if (enable_slices) {
-        if (venc_by_frame) {
-          printf("WARN: Slices are not available in [frame] data format\n");
-        } else {
-          int ret = HI_MPI_VENC_SetH264SliceSplit(channel_id, &avc_param);
-          if (ret != HI_SUCCESS) {
-            printf("ERROR: Unable to set VENC h264 slice size = 0x%x\n", ret);
-            return ret;
-          }
-        }
-      }
-
-      HI_MPI_VENC_GetH264SliceSplit(channel_id, &avc_param);
-      printf("> H264 slices is [%s] | Slice size = %d lines\n",
-        avc_param.bSplitEnable ? "Enabled" : "Disabled", avc_param.u32MbLineNum);
-      break;
-
-    case PT_H265:
-      VENC_H265_SLICE_SPLIT_S hevc_param;
-      HI_MPI_VENC_GetH265SliceSplit(channel_id, &hevc_param);
-      hevc_param.bSplitEnable = 1;
-      hevc_param.u32LcuLineNum = venc_slice_size;
-
-      if (enable_slices) {
-        if (venc_by_frame) {
-          printf("WARN: Slices are not available in [frame] data format\n");
-        } else {
-          int ret = HI_MPI_VENC_SetH265SliceSplit(channel_id, &hevc_param);
-          if (ret != HI_SUCCESS) {
-            printf("ERROR: Unable to set VENC h265 slice size = 0x%x\n", ret);
-            return ret;
-          }
-        }
-      }
-
-      HI_MPI_VENC_GetH265SliceSplit(channel_id, &hevc_param);
-      printf("> H265 slices is [%s] | Slice size = %d lines\n",
-        hevc_param.bSplitEnable ? "Enabled" : "Disabled", hevc_param.u32LcuLineNum);
-      break;
-  }
-
   if (rc_codec != PT_MJPEG) {
     VENC_REF_PARAM_S ref_param;
     HI_MPI_VENC_GetRefParam(channel_id, &ref_param);
@@ -274,26 +221,6 @@ HI_S32 configure_venc_channel(
       return ret;
     }
   }
-
-  if (enable_roi) {
-    VENC_ROI_ATTR_S roi_config;
-    roi_config.bEnable = HI_TRUE;
-    roi_config.u32Index = 0;
-    roi_config.stRect.s32X = ALIGN_UP(image_width / 4, 16);
-    roi_config.stRect.s32Y = ALIGN_UP(image_height / 4, 16);
-    roi_config.stRect.u32Width = ALIGN_UP(image_width / 2, 16);
-    roi_config.stRect.u32Height = ALIGN_UP(image_height / 2, 16);
-    roi_config.bAbsQp = HI_TRUE;
-    roi_config.s32Qp = roi_qp;
-
-    ret = HI_MPI_VENC_SetRoiAttr(channel_id, &roi_config);
-    if (ret != HI_SUCCESS) {
-      printf("ERROR: Unable to setup VENC ROI = 0x%x\n", ret);
-      return ret;
-    }
-
-    printf("> ROI is [Enabled]\n");
-  }
 }
 
 int main(int argc, const char* argv[]) {
@@ -324,7 +251,6 @@ int main(int argc, const char* argv[]) {
   VENC_CHN venc_first_ch_id = 0;
   VENC_CHN venc_second_ch_id = 1;
   HI_BOOL venc_by_frame = HI_FALSE;
-  uint32_t venc_slice_size = 4;
 
   uint32_t udp_sink_ip = inet_addr("127.0.0.1");
   uint16_t udp_sink_port = 5000;
@@ -334,15 +260,12 @@ int main(int argc, const char* argv[]) {
   uint32_t image_height_ch1 = 720;
   uint16_t udp_sink_port_ch1 = 5001;
   
-  int enable_slices = 1;
   int enable_lowdelay = 0;
-  int enable_roi = 0;
   bool limit_exposure = false;
   int ret = 0;
 
   int image_mirror = HI_FALSE;
   int image_flip = HI_FALSE;
-  uint16_t roi_qp = 20;
 
   PAYLOAD_TYPE_E rc_codec = PT_H264;
   int rc_mode = VENC_RC_MODE_H264AVBR;
@@ -437,16 +360,6 @@ int main(int argc, const char* argv[]) {
     continue;
   }
 
-  __OnArgument("--no-slices") {
-    enable_slices = 0;
-    continue;
-  }
-
-  __OnArgument("--slice-size") {
-    venc_slice_size = atoi(__ArgValue);
-    continue;
-  }
-
   __OnArgument("--low-delay") {
     enable_lowdelay = 1;
     continue;
@@ -526,16 +439,6 @@ int main(int argc, const char* argv[]) {
 
   __OnArgument("--gop") {
     venc_gop_size = atoi(__ArgValue);
-    continue;
-  }
-
-  __OnArgument("--roi") {
-    enable_roi = 1;
-    continue;
-  }
-
-  __OnArgument("--roi-qp") {
-    roi_qp = atoi(__ArgValue);
     continue;
   }
 
@@ -1099,11 +1002,7 @@ int main(int argc, const char* argv[]) {
     venc_second_ch_id,
     &config,
     venc_by_frame,
-    venc_slice_size,
     venc_max_rate,
-    enable_slices,
-    enable_roi,
-    roi_qp,
     image_width,
     image_height);
   
@@ -1119,11 +1018,7 @@ int main(int argc, const char* argv[]) {
   //   venc_first_ch_id, // Channel 1
   //   &config,
   //   venc_by_frame,
-  //   venc_slice_size,
   //   venc_max_rate,
-  //   enable_slices,
-  //   enable_roi,
-  //   roi_qp,
   //   image_width_ch1,
   //   image_height_ch1);
 
